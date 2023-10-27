@@ -12,19 +12,20 @@
 #define PIPE '|'
 #define SEMI ';'
 
-
 // including "fcntl.h manually"
 #define O_RDONLY 0x000
 #define O_WRONLY 0x001
 #define O_RDWR 0x002
 #define O_CREATE 0x200
 
-void collect_input(char *input){
+void collect_input(char *input)
+{
     printf(">>> ");
     gets(input, MAX_INPUT);
 
     int len = strlen(input);
-    if (len > 0 && input[len - 1] == '\n') {
+    if (len > 0 && input[len - 1] == '\n')
+    {
         input[len - 1] = '\0';
     }
 }
@@ -128,25 +129,107 @@ char **split_string(const char *str)
     return result;
 }
 
+// int run_adv_cmd(char **cmd)
+// {
+//     int i;
+//     char *input_file = 0;
+//     char *output_file = 0;
+
+//     // Loop through cmd to identify '<' and/or '>'
+//     for (i = 0; cmd[i] != 0; ++i)
+//     {
+//         if (strcmp(cmd[i], "<") == 0)
+//         {
+//             input_file = cmd[i + 1];
+//             cmd[i] = 0; // Nullify the '<' symbol
+//         }
+//         if (strcmp(cmd[i], ">") == 0)
+//         {
+//             output_file = cmd[i + 1];
+//             cmd[i] = 0; // Nullify the '>' symbol
+//         }
+//         if (strcmp(cmd[i], "|") == 0)
+//         {
+
+//         }
+//     }
+
+//     int pid = fork();
+//     if (pid == 0)
+//     { // Child process
+//         if (input_file)
+//         {
+//             close(0); // Close stdin
+//             if (open(input_file, O_RDONLY) < 0)
+//             { // Open the file for reading
+//                 printf("Failed to open input file: %s\n", input_file);
+//                 exit(1);
+//             }
+//         }
+//         if (output_file)
+//         {
+//             close(1);                                      // Close stdout then
+//             int fd = open(output_file, O_CREATE | O_RDWR); // Open the file for writing
+//             if (fd < 0)
+//             {
+//                 printf("Failed to open output file: %s\n", output_file);
+//                 exit(1);
+//             }
+//         }
+
+//         exec(cmd[0], cmd); // Execute the command
+//         printf("exec %s failed\n", cmd[0]);
+//         exit(1);
+//     }
+//     else if (pid > 0)
+//     { // Parent process
+//         wait(0);
+//     }
+//     else
+//     { // Fork failed
+//         printf("fork failed\n");
+//         return 1;
+//     }
+
+//     return 0;
+// }
+
 int run_adv_cmd(char **cmd)
 {
     int i;
     char *input_file = 0;
     char *output_file = 0;
+    char **cmd2 = 0;
+    int p[2];
 
-    // Loop through cmd to identify '<' and/or '>'
+    // Loop through cmd to identify '<', '>', and '|'
     for (i = 0; cmd[i] != 0; ++i)
     {
         if (strcmp(cmd[i], "<") == 0)
         {
             input_file = cmd[i + 1];
-            cmd[i] = 0; // Nullify the '<' symbol
+            cmd[i] = 0;
         }
         if (strcmp(cmd[i], ">") == 0)
         {
             output_file = cmd[i + 1];
-            cmd[i] = 0; // Nullify the '>' symbol
+            cmd[i] = 0;
         }
+        if (strcmp(cmd[i], "|") == 0)
+        {
+            cmd2 = &cmd[i + 1];
+            cmd[i] = 0;
+            pipe(p);
+        }
+        // if (strcmp(cmd[i], ";")){
+        //     cmd2 = &cmd[i + 1];
+        //     cmd[i] = 0;
+            
+        //     printf("cmd is %s", cmd[0]);
+        //     printf("cmd2 is %s", cmd2[0]);
+        //     exec(cmd[0], cmd);
+        //     exec(cmd2[0], cmd);
+        // }
     }
 
     int pid = fork();
@@ -154,38 +237,73 @@ int run_adv_cmd(char **cmd)
     { // Child process
         if (input_file)
         {
-            close(0); // Close stdin
+            close(0);
             if (open(input_file, O_RDONLY) < 0)
-            { // Open the file for reading
+            {
                 printf("Failed to open input file: %s\n", input_file);
                 exit(1);
             }
         }
         if (output_file)
         {
-            close(1);                                      // Close stdout then
-            int fd = open(output_file, O_CREATE | O_RDWR); // Open the file for writing
-            if (fd < 0)
+            close(1);
+            if (open(output_file, O_CREATE | O_RDWR) < 0)
             {
                 printf("Failed to open output file: %s\n", output_file);
                 exit(1);
             }
         }
+        if (cmd2)
+        {
+            close(1);
+            dup(p[1]);
+            close(p[0]);
+            close(p[1]);
+        }
 
-        exec(cmd[0], cmd); // Execute the command
+        exec(cmd[0], cmd);
         printf("exec %s failed\n", cmd[0]);
         exit(1);
     }
     else if (pid > 0)
     { // Parent process
-        wait(0);
+        if (cmd2)
+        {
+            int pid2 = fork();
+            if (pid2 == 0)
+            { // Second child for right side of pipe
+                close(0);
+                dup(p[0]);
+                close(p[0]);
+                close(p[1]);
+                exec(cmd2[0], cmd2);
+                printf("exec %s failed\n", cmd2[0]);
+                exit(1);
+            }
+            else if (pid2 > 0)
+            { // Parent process
+                close(p[0]);
+                close(p[1]);
+                wait(0);
+                wait(0);
+                return 0;
+            }
+            else
+            {
+                printf("second fork failed\n");
+                return 1;
+            }
+        }
+        else
+        {
+            wait(0);
+        }
     }
     else
     { // Fork failed
         printf("fork failed\n");
         return 1;
     }
-
     return 0;
 }
 
