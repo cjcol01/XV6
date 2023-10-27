@@ -1,0 +1,8 @@
+# Ignore everything
+
+
+# Except the user directory
+!/xv6_riscv_comp2211/user/
+!/xv6_riscv_comp2211/user/*
+
+xv6-tools_buildx-latest.sif
