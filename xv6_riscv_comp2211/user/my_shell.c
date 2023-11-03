@@ -150,7 +150,6 @@ char **split_string(const char *str)
 //         }
 //         if (strcmp(cmd[i], "|") == 0)
 //         {
-
 //         }
 //     }
 
@@ -221,15 +220,14 @@ int run_adv_cmd(char **cmd)
             cmd[i] = 0;
             pipe(p);
         }
-        // if (strcmp(cmd[i], ";")){
-        //     cmd2 = &cmd[i + 1];
-        //     cmd[i] = 0;
-            
-        //     printf("cmd is %s", cmd[0]);
-        //     printf("cmd2 is %s", cmd2[0]);
-        //     exec(cmd[0], cmd);
-        //     exec(cmd2[0], cmd);
-        // }
+        if (strcmp(cmd[i], ";") == 0)
+        {
+            cmd2 = &cmd[i + 1];
+            cmd[i] = 0;
+
+            printf("cmd is %s ", cmd[1]);
+            printf("cmd2 is %s\n", cmd2[1]);
+        }
     }
 
     int pid = fork();
@@ -255,10 +253,19 @@ int run_adv_cmd(char **cmd)
         }
         if (cmd2)
         {
-            close(1);
-            dup(p[1]);
-            close(p[0]);
-            close(p[1]);
+            // close(1);
+            // dup(p[1]);
+            // close(p[0]);
+            // close(p[1]);
+            exec(cmd[0], cmd);
+            // Free the memory allocated for cmd
+            for (int i = 0; cmd2[i]; i++)
+            {
+                free(cmd2[i]);
+            }
+            free(cmd2);
+            // exec(cmd2[0], cmd);
+            exit(1);
         }
 
         exec(cmd[0], cmd);
