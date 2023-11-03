@@ -129,70 +129,6 @@ char **split_string(const char *str)
     return result;
 }
 
-// int run_adv_cmd(char **cmd)
-// {
-//     int i;
-//     char *input_file = 0;
-//     char *output_file = 0;
-
-//     // Loop through cmd to identify '<' and/or '>'
-//     for (i = 0; cmd[i] != 0; ++i)
-//     {
-//         if (strcmp(cmd[i], "<") == 0)
-//         {
-//             input_file = cmd[i + 1];
-//             cmd[i] = 0; // Nullify the '<' symbol
-//         }
-//         if (strcmp(cmd[i], ">") == 0)
-//         {
-//             output_file = cmd[i + 1];
-//             cmd[i] = 0; // Nullify the '>' symbol
-//         }
-//         if (strcmp(cmd[i], "|") == 0)
-//         {
-//         }
-//     }
-
-//     int pid = fork();
-//     if (pid == 0)
-//     { // Child process
-//         if (input_file)
-//         {
-//             close(0); // Close stdin
-//             if (open(input_file, O_RDONLY) < 0)
-//             { // Open the file for reading
-//                 printf("Failed to open input file: %s\n", input_file);
-//                 exit(1);
-//             }
-//         }
-//         if (output_file)
-//         {
-//             close(1);                                      // Close stdout then
-//             int fd = open(output_file, O_CREATE | O_RDWR); // Open the file for writing
-//             if (fd < 0)
-//             {
-//                 printf("Failed to open output file: %s\n", output_file);
-//                 exit(1);
-//             }
-//         }
-
-//         exec(cmd[0], cmd); // Execute the command
-//         printf("exec %s failed\n", cmd[0]);
-//         exit(1);
-//     }
-//     else if (pid > 0)
-//     { // Parent process
-//         wait(0);
-//     }
-//     else
-//     { // Fork failed
-//         printf("fork failed\n");
-//         return 1;
-//     }
-
-//     return 0;
-// }
-
 int run_adv_cmd(char **cmd)
 {
     int i;
@@ -220,14 +156,14 @@ int run_adv_cmd(char **cmd)
             cmd[i] = 0;
             pipe(p);
         }
-        if (strcmp(cmd[i], ";") == 0)
-        {
-            cmd2 = &cmd[i + 1];
-            cmd[i] = 0;
+        // if (strcmp(cmd[i], ";") == 0)
+        // {
+        //     cmd2 = &cmd[i + 1];
+        //     cmd[i] = 0;
 
-            printf("cmd is %s ", cmd[1]);
-            printf("cmd2 is %s\n", cmd2[1]);
-        }
+        //     printf("cmd is %s ", cmd[1]);
+        //     printf("cmd2 is %s\n", cmd2[1]);
+        // }
     }
 
     int pid = fork();
@@ -251,22 +187,22 @@ int run_adv_cmd(char **cmd)
                 exit(1);
             }
         }
-        if (cmd2)
-        {
-            // close(1);
-            // dup(p[1]);
-            // close(p[0]);
-            // close(p[1]);
-            exec(cmd[0], cmd);
-            // Free the memory allocated for cmd
-            for (int i = 0; cmd2[i]; i++)
-            {
-                free(cmd2[i]);
-            }
-            free(cmd2);
-            // exec(cmd2[0], cmd);
-            exit(1);
-        }
+        // if (cmd2)
+        // {
+        //     // close(1);
+        //     // dup(p[1]);
+        //     // close(p[0]);
+        //     // close(p[1]);
+        //     exec(cmd[0], cmd);
+        //     // Free the memory allocated for cmd
+        //     for (int i = 0; cmd2[i]; i++)
+        //     {
+        //         free(cmd2[i]);
+        //     }
+        //     free(cmd2);
+        //     // exec(cmd2[0], cmd);
+        //     exit(1);
+        // }
 
         exec(cmd[0], cmd);
         printf("exec %s failed\n", cmd[0]);
