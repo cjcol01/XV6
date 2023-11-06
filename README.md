@@ -6,4 +6,4 @@
   - Run ```./startxv6.sh``` to start apptainer
   - Run ```./rr.sh``` to start XV6 (makes all required)
   - Run ```my_shell``` to start my shell implementation
-  - Now you can run most commands present in XV6
+  - Now you can run most commands present in XV6, including multipipes and redirection
