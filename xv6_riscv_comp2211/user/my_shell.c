@@ -1,7 +1,5 @@
 #include "kernel/types.h"
 #include "user/user.h"
-// #include "kernel/stat.h"
-// #include "fcntl.h"
 
 #define MAX_WORDS 25
 #define MAX_INPUT 256
@@ -18,6 +16,9 @@
 #define O_RDWR 0x002
 #define O_CREATE 0x200
 
+// void run_command(char **cmd, int input_fd, int output_fd);
+
+// collects and cleans input
 void collect_input(char *input)
 {
     printf(">>> ");
@@ -30,6 +31,7 @@ void collect_input(char *input)
     }
 }
 
+// exits shell when exit command run
 int exit_shell(char *input)
 {
     if (strcmp(input, "exit") == 0)
@@ -40,14 +42,15 @@ int exit_shell(char *input)
     return 0;
 }
 
+//handles unique cd cmd
 int cd(char *input)
 {
     if (input[0] == 'c' && input[1] == 'd' && input[2] == ' ')
     {
-        // everything after "cd " (directory path)
+        // all cmd after "cd "
         char *dir_path = input + 3;
 
-        // Change directory
+        // Change dir
         if (chdir(dir_path) < 0)
         {
             printf("cd: cannot change directory to %s\n", dir_path);
@@ -57,15 +60,17 @@ int cd(char *input)
     return 0;
 }
 
+// removes leading, multiple and trailing spaces
 char *remove_spaces(char *input)
 {
     int len = strlen(input);
-    char *result = (char *)malloc(len + 1); // malloc for new string
+    char *result = (char *)malloc(len + 1);
     int i = 0, j = 0;
     int word_started = 0;
 
     for (i = 0; i < len; i++)
     {
+        // remove leading spaces
         if (input[i] != ' ')
         {
             word_started = 1;
@@ -91,9 +96,11 @@ char *remove_spaces(char *input)
     {
         result[j] = '\0';
     }
+    // TODO dont return, its pointer so doesnt need it
     return result;
 }
 
+// splits string by spaces and null terminates
 char **split_string(const char *str)
 {
     char **result = malloc(MAX_WORDS * sizeof(char *));
@@ -119,126 +126,100 @@ char **split_string(const char *str)
                 exit(1);
             }
             memcpy(result[wordCount], &str[start], wordLength);
-            result[wordCount][wordLength] = '\0'; // Null terminate the string
+            result[wordCount][wordLength] = '\0'; // Null char to terminate the string
             wordCount++;
             start = end + 1;
         }
     }
 
-    result[wordCount] = 0; // Mark the end of the array of strings
+    result[wordCount] = 0; // Mark the end of the array
     return result;
 }
 
-int run_adv_cmd(char **cmd)
-{
-    int i;
-    char *input_file = 0;
-    char *output_file = 0;
-    char *pipe_cmd[10] = {0}; // Array to hold the command after the pipe '|'
-
-    // Loop through cmd to identify '<', '>', and '|'
-    for (i = 0; cmd[i] != 0; ++i)
-    {
-        if (strcmp(cmd[i], "<") == 0)
-        {
-            input_file = cmd[i + 1];
-            cmd[i] = 0;
-        }
-        if (strcmp(cmd[i], ">") == 0)
-        {
-            output_file = cmd[i + 1];
-            cmd[i] = 0;
-        }
-        if (strcmp(cmd[i], "|") == 0)
-        {
-            cmd[i] = 0;
-            int j = 0;
-            for (i = i + 1; cmd[i] != 0; ++i, ++j)
-            {
-                pipe_cmd[j] = cmd[i];
-            }
-            pipe_cmd[j] = 0;
-            break;
-        }
-    }
-
-    int p[2];
-    pipe(p); // Create the pipe
-
+// creates forks and execs commands
+int fork_and_exec(char **cmd, int in_fd, int out_fd) {
     int pid = fork();
-    if (pid == 0)
-    { // Child process
-        if (pipe_cmd[0])
-        {                // If there is a pipe
-            close(p[0]); // Close reading end in the child
-            close(1);
-            dup(p[1]);
-            close(p[1]);
-        }
-
-        if (input_file)
-        {
+    
+    if (pid == 0) { // Child process
+        if (in_fd != 0) { // Replace standard input with in_fd
             close(0);
-            if (open(input_file, O_RDONLY) < 0)
-            {
-                printf("Failed to open input file: %s\n", input_file);
-                exit(1);
-            }
+            dup(in_fd);
+            close(in_fd);
         }
 
-        if (output_file)
-        {
+        if (out_fd != 1) { // Replace standard output with out_fd
             close(1);
-            if (open(output_file, O_CREATE | O_RDWR) < 0)
-            {
-                printf("Failed to open output file: %s\n", output_file);
-                exit(1);
-            }
+            dup(out_fd);
+            close(out_fd);
         }
 
         exec(cmd[0], cmd);
         printf("exec %s failed\n", cmd[0]);
         exit(1);
     }
-    else if (pid > 0)
-    { // Parent process
-        if (pipe_cmd[0])
-        {
-            int pid2 = fork();
-            if (pid2 == 0)
-            { // Second child process
-                close(p[1]);
-                close(0);
-                dup(p[0]);
-                close(p[0]);
-                exec(pipe_cmd[0], pipe_cmd);
-                printf("exec %s failed\n", pipe_cmd[0]);
+    return pid;
+}
+
+// handle redirects and find next command
+int redirect_find_next_cmd(char **cmd, int *in_fd, int *out_fd, char ***next_cmd) {
+    int i;
+    for (i = 0; cmd[i]; ++i) {
+        if (cmd[i][0] == '<') {
+            cmd[i] = 0; // Terminate cmd here
+            *in_fd = open(cmd[i + 1], O_RDONLY);
+            if (*in_fd < 0) {
+                printf("Failed to open input file: %s\n", cmd[i + 1]);
                 exit(1);
             }
-            else if (pid2 > 0)
-            { // Parent process
-                close(p[0]);
-                close(p[1]);
-                wait(0);
-                wait(0);
+        } else if (cmd[i][0] == '>') {
+            cmd[i] = 0; // Terminate cmd here
+            *out_fd = open(cmd[i + 1], O_CREATE | O_RDWR);
+            if (*out_fd < 0) {
+                printf("Failed to open output file: %s\n", cmd[i + 1]);
+                exit(1);
             }
-            else
-            {
-                printf("Second fork failed\n");
-            }
-        }
-        else
-        {
-            wait(0);
+        } else if (cmd[i][0] == '|') {
+            cmd[i] = 0; // Terminate current cmd here
+            *next_cmd = cmd + i + 1; // Set pointer to the next cmd
+            return 1;
         }
     }
-    else
-    { // Fork failed
-        printf("fork failed\n");
-        return 1;
-    }
-
+    *next_cmd = (char **)0; // set to 0 ("NULL"), indicating end of commands
     return 0;
+}
+
+// runs command recursively to handle multipipes
+int run_adv_cmd_recursively(char **cmd, int in_fd) {
+    int out_fd = 1; // Default as std out
+    int p[2];
+    int pid;
+    char **next_cmd = (char **)0;
+
+    if (redirect_find_next_cmd(cmd, &in_fd, &out_fd, &next_cmd)) {
+        pipe(p);
+        fork_and_exec(cmd, in_fd, p[1]);
+        close(p[1]); // Close write end of pipe in the parent
+        if (in_fd != 0) close(in_fd); // Close  previous read end if it's not std input
+
+        // recursive call to handle next command
+        return run_adv_cmd_recursively(next_cmd, p[0]);
+    } else {
+        // run last command or the only command if no pipes
+        pid = fork_and_exec(cmd, in_fd, out_fd);
+        if (in_fd != 0) close(in_fd);
+        if (out_fd != 1) close(out_fd);
+        return pid;
+    }
+}
+
+// calls the run command and waits for child processes to finish
+// TODO remove this function
+void run_adv_cmd(char **cmd) {
+    // Start recursive pipes and redir
+    int last_pid = run_adv_cmd_recursively(cmd, 0);
+
+    while (wait(0) != last_pid) {
+    }
 }
 
 int main(int argc, char *argv[])
