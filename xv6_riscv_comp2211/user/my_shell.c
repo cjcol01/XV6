@@ -128,6 +128,8 @@ char **split_string(const char *str)
     result[wordCount] = 0; // Mark the end of the array of strings
     return result;
 }
+
+
 int fork_and_exec(char **cmd, int in_fd, int out_fd) {
     int pid = fork();
     
@@ -151,48 +153,63 @@ int fork_and_exec(char **cmd, int in_fd, int out_fd) {
     return pid;
 }
 
-int run_adv_cmd_recursively(char **cmd, int in_fd) {
-    int p[2];
-    int pid;
-    char **next_cmd = cmd;
-
-    // Find the next pipe or end of command
-    while (*next_cmd != 0) {
-        if (strcmp(*next_cmd, "|") == 0) {
-            *next_cmd = 0; // Terminate the current command here
-            pipe(p);
-            fork_and_exec(cmd, in_fd, p[1]);
-            close(p[1]); // Close write end of the pipe in the parent
-
-            if (in_fd != 0) {
-                close(in_fd); // Close the previous read end
+int handle_redirection_and_find_next_cmd(char **cmd, int *in_fd, int *out_fd, char ***next_cmd) {
+    int i;
+    for (i = 0; cmd[i]; ++i) {
+        if (cmd[i][0] == '<') {
+            cmd[i] = 0; // Terminate the cmd here
+            *in_fd = open(cmd[i + 1], O_RDONLY);
+            if (*in_fd < 0) {
+                printf("Failed to open input file: %s\n", cmd[i + 1]);
+                exit(1);
             }
-
-            // Set up for the next command after the pipe
-            cmd = next_cmd + 1;
-            in_fd = p[0]; // Use the read end of the pipe we just created
-            next_cmd = cmd;
-        } else {
-            next_cmd++;
+        } else if (cmd[i][0] == '>') {
+            cmd[i] = 0; // Terminate the cmd here
+            *out_fd = open(cmd[i + 1], O_CREATE | O_RDWR);
+            if (*out_fd < 0) {
+                printf("Failed to open output file: %s\n", cmd[i + 1]);
+                exit(1);
+            }
+        } else if (cmd[i][0] == '|') {
+            cmd[i] = 0; // Terminate the current command here
+            *next_cmd = cmd + i + 1; // Set the pointer to the next command
+            return 1; // Found a pipe
         }
     }
+    *next_cmd = (char **)0; // Equivalent to setting to NULL, indicating end of commands
+    return 0; // No more pipes
+}
 
-    // Handle the last command (or the only command if no pipes)
-    pid = fork_and_exec(cmd, in_fd, 1);
-    if (in_fd != 0) {
-        close(in_fd);
+int run_adv_cmd_recursively(char **cmd, int in_fd) {
+    int out_fd = 1; // Default to standard output
+    int p[2];
+    int pid;
+    char **next_cmd = (char **)0;
+
+    if (handle_redirection_and_find_next_cmd(cmd, &in_fd, &out_fd, &next_cmd)) {
+        pipe(p);
+        fork_and_exec(cmd, in_fd, p[1]);
+        close(p[1]); // Close write end of the pipe in the parent
+        if (in_fd != 0) close(in_fd); // Close the previous read end if it's not standard input
+
+        // Recurse to handle the next command
+        return run_adv_cmd_recursively(next_cmd, p[0]);
+    } else {
+        // This is the last command, or the only command if no pipes
+        pid = fork_and_exec(cmd, in_fd, out_fd);
+        if (in_fd != 0) close(in_fd); // Close the read end if it's not standard input
+        if (out_fd != 1) close(out_fd); // Close the write end if it's not standard output
+        return pid;
     }
-    return pid;
 }
 
 int run_adv_cmd(char **cmd) {
-    // Handle input/output redirection here if needed
-
-    // Start the recursive piping process
-    int pid = run_adv_cmd_recursively(cmd, 0);
+    // Start the recursive piping and redirection process
+    int last_pid = run_adv_cmd_recursively(cmd, 0);
 
     // Parent process waits for all child processes
-    while (wait(0) != pid) {
+    while (wait(0) != last_pid) {
+        // Waiting for the last command in the pipe to finish
     }
     
     return 0;
