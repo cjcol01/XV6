@@ -1,6 +1,7 @@
 # XV6 Shell Implementation
 
-## Usage
+## Usage 
+  - Download XV6 from https://github.com/mit-pdos/xv6-public
   - Clone repository
   - Navigate to root of folder
   - Run ```./startxv6.sh``` to start apptainer
